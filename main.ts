@@ -4,7 +4,7 @@
 // Writes one ~100-word monologue, spoken by a fantasy villain who is
 // secretly just very tired, to /output/entry.txt (or $MAKEFUN_OUTPUT_DIR).
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 // Why this monologue targets the judges' criteria (veteran game writer):
 // - Tiredness felt, never announced: the villain never says he is weary.
@@ -41,3 +41,27 @@ if (MONOLOGUE.length < 1 || MONOLOGUE.length > 600) {
 const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "out";
 mkdirSync(outDir, { recursive: true });
 writeFileSync(`${outDir}/entry.txt`, MONOLOGUE, "utf8");
+
+// Round-trip self-check: read the entry back from disk and verify it is
+// byte-identical to the monologue. A truncated, corrupted, or partial
+// write must fail loudly here instead of silently shipping a wrong entry.
+const written = readFileSync(`${outDir}/entry.txt`, "utf8");
+if (written !== MONOLOGUE) {
+  throw new Error("round-trip self-check failed: entry.txt differs from monologue");
+}
+
+// Tightened guard on what actually landed on disk: the file on disk must
+// be clean too — no leading/trailing whitespace, and the same word count
+// as the validated monologue — so the entry that ships is exactly the
+// entry that passed the checks above, not just a string that looked right
+// in memory before the write.
+if (written !== written.trim()) {
+  throw new Error("entry.txt must not have leading/trailing whitespace");
+}
+if (written.trim().split(/\s+/).length !== words.length) {
+  throw new Error(
+    `entry.txt word count (${written.trim().split(/\s+/).length}) differs from monologue (${words.length})`,
+  );
+}
+
+console.log(`wrote ${outDir}/entry.txt (${words.length} words, ${MONOLOGUE.length} chars, round-trip verified)`);
